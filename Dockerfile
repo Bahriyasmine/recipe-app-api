@@ -1,32 +1,58 @@
 FROM python:3.9-alpine3.13
 LABEL maintainer="yasmine@bahrideveloper.com"
 
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONUNBUFFERED=1
 
 COPY ./requirements.txt /tmp/requirements.txt
 COPY ./requirements.dev.txt /tmp/requirements.dev.txt
 COPY ./app /app
+
 WORKDIR /app
 EXPOSE 8000
 
 ARG DEV=false
+
 RUN python -m venv /py && \
     /py/bin/pip install --upgrade pip && \
-    apk add --update --no-cache postgresql-client && \
+    \
+    # Runtime dependencies
+    apk add --update --no-cache \
+        postgresql-client \
+        jpeg \
+        zlib && \
+    \
+    # Build dependencies (Pillow, psycopg2)
     apk add --update --no-cache --virtual .tmp-build-deps \
-        build-base postgresql-dev musl-dev && \
+        build-base \
+        postgresql-dev \
+        musl-dev \
+        zlib-dev \
+        jpeg-dev && \
+    \
+    # Install Python dependencies
     /py/bin/pip install -r /tmp/requirements.txt && \
-    if [ $DEV = "true" ]; \
-        then /py/bin/pip install -r /tmp/requirements.dev.txt ; \
+    \
+    # Dev dependencies
+    if [ "$DEV" = "true" ]; then \
+        /py/bin/pip install -r /tmp/requirements.dev.txt ; \
     fi && \
+    \
+    # Cleanup
     rm -rf /tmp && \
     apk del .tmp-build-deps && \
+    \
+    # Create user
     adduser \
         --disabled-password \
         --no-create-home \
-        django-user
+        django-user && \
+    \
+    # Media & static volumes
+    mkdir -p /vol/web/media && \
+    mkdir -p /vol/web/static && \
+    chown -R django-user:django-user /vol && \
+    chmod -R 755 /vol
 
 ENV PATH="/py/bin:$PATH"
 
 USER django-user
-
